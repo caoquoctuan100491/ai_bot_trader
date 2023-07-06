@@ -8,11 +8,13 @@ const AISchema = new mongoose.Schema({
   symbol: String,
   candle: Number,
   investment: Number,
+  currentBalance:Number,
   rsi_buy: Number,
   rsi_sell: Number,
   stop_loss: Number,
   take_profit: Number,
   userId: String,
+  amount:Number,
   profit: Number,
 });
 
