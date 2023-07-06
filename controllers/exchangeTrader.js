@@ -5,6 +5,7 @@ const Api = require("../models/Exchange_API");
 const ccxt = require("ccxt");
 const technicalindicators = require("technicalindicators");
 const { query } = require("express");
+const { default: axios } = require("axios");
 
 const utils = {
   getExchange: (body) => {
@@ -151,6 +152,7 @@ async function run(AIdoc) {
               obj.investment,
               lastPrice
             );
+            sendTelegram("CapricornTrader buy " + obj.symbol.split("/")[0] + " with price: " + lastPrice);
           }
 
           if (
@@ -167,6 +169,7 @@ async function run(AIdoc) {
               amount,
               lastPrice
             );
+            sendTelegram("CapricornTrader sell " + obj.symbol.split("/")[0] + " with price: " + lastPrice);
           }
         }
       }
@@ -244,6 +247,36 @@ const stop = async (req, res) => {
 };
 
 const update = async (req, res) => {};
+
+const sendTelegram = async (sendMSG) => {
+  let telegram_api ="https://api.telegram.org/bot6379516028:AAEScTUM7Peg7LQXb0mqdXo-fgDiycrEYEM";
+  let telegramId = await getTelegramId(telegram_api, "MardSilver", "userId");
+  await axios.post(telegram_api + "/sendMessage", {
+    chat_id: 1856763891,
+    text: sendMSG,
+  });
+};
+
+let getTelegramId = async (telegram_api, title, type) => {
+  let teleGetUpdates = await axios.post(telegram_api + "/getUpdates");
+  let getUpdatesResult = teleGetUpdates.data.result;
+  for (let index = 0; index < getUpdatesResult.length; index++) {
+    const element = getUpdatesResult[index];
+    if (element.my_chat_member && type === "chatId") {
+      if (
+        element.my_chat_member.chat.title.toLowerCase() === title.toLowerCase()
+      ) {
+        return element.my_chat_member.chat.id;
+      }
+    }
+
+    if (element.message && type === "userId") {
+      if (element.message.chat.username.toLowerCase() === title.toLowerCase()) {
+        return element.message.chat.id;
+      }
+    }
+  }
+};
 
 module.exports = {
   start,
