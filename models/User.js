@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
     phone:String,
     expiresIn:String,
     membership:String,
+    telegram:String,
 });
 
 UserSchema.pre('save', async function(next) {
