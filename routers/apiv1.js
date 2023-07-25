@@ -16,6 +16,8 @@ const apiRoute = (app) => {
 
   router.get("/fetchBalance",auth,exchangeAIController.fetchBalance);
   router.get("/fetchSymbols",exchangeAIController.fetchSymbols);
+  router.get("/listentNewSymbols",exchangeAIController.updateNewSymbol);
+  router.get("/OnOfflistentNewSymbols",exchangeAIController.updateNewSymbol);
 
   router.get("/trader/",auth,exchangeAIController.getListAITrader);
   router.post("/trader/",auth,exchangeAIController.start);

@@ -1,11 +1,14 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const AI = require("../models/AI");
+const Order = require("../models/Order");
+const Symbol = require("../models/Symbol");
 const Api = require("../models/Exchange_API");
 const ccxt = require("ccxt");
 const technicalindicators = require("technicalindicators");
 const { query } = require("express");
 const { default: axios } = require("axios");
+const User = require("../models/User");
 
 const utils = {
   getExchange: (body) => {
@@ -67,11 +70,41 @@ const fetchBalance = async (req, res) => {
 
 const fetchSymbols = async (req, res) => {
   try {
-    let symbols = await utils.getSymbols(req.query.exchange);
+    let symbols = await Symbol.find({ exchange: req.query.exchange });
+    if (symbols.length == 0) {
+      symbols = await utils.getSymbols(req.query.exchange);
+      symbols.forEach((symbol) => {
+        let obj = new Symbol(req.query.exchange, symbol);
+        obj.save();
+      });
+    }
     res.json(symbols);
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
+};
+
+const updateNewSymbol = async (req, res) => {
+  let user = await User.findById(req.user.id);
+  let time = 24 * 60 * 1000;
+  let intervalTime = setInterval(async () => {
+    if (user.eventUpdateNewSymbol) {
+      let array = await Symbol.find({ exchange: req.query.exchange });
+      let symbols = await utils.getSymbols(req.query.exchange);
+      if (array.length == 0) {
+        for (let symbol in symbols) {
+          if (!JSON.parse(array).includes(symbol)) {
+            console.log(symbol);
+            sendTelegram("new symbol has listed on" + req.query.exchange +": " + symbol);
+          } else {
+            console.log("exists");
+          }
+        }
+      }
+    } else {
+      clearInterval(intervalTime);
+    }
+  }, time);
 };
 
 async function run(AIdoc) {
@@ -144,7 +177,7 @@ async function run(AIdoc) {
             console.log(lastPrice);
             let order;
 
-            if (lastRsi <= obj.rsi_buy && lastPrice > lastSma) {
+            if (lastRsi <= obj.rsi_buy) {
               // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
               // Buy
               order = await exchange.createOrder(
@@ -166,9 +199,7 @@ async function run(AIdoc) {
 
             if (
               obj.amount > 0 &&
-              lastRsi >= obj.rsi_sell &&
-              lastPrice < lastSma &&
-              lastPrice > lastBb.upper
+              lastRsi >= obj.rsi_sell
             ) {
               //Sell
               order = await exchange.createOrder(
@@ -219,8 +250,9 @@ const start = async (req, res) => {
       .json({ message: "You do not have permission to update this API." });
   }
 
-  let exchange = utils.getExchange(obj);
+  // let exchange = utils.getExchange(obj);
   // await exchange.loadMarkets();
+
   let AIdoc = new AI();
   AIdoc.exchange = body.exchange;
   AIdoc.status = "running";
@@ -334,4 +366,5 @@ module.exports = {
   resume,
   fetchBalance,
   fetchSymbols,
+  updateNewSymbol,
 };
