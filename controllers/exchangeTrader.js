@@ -110,128 +110,148 @@ const updateNewSymbol = async (req, res) => {
 };
 
 async function run(AIdoc) {
-  try {
-    let api = await Api.findById(AIdoc.account);
-    let exchange = utils.getExchange(api);
-    let intervalID = setInterval(async () => {
-      let obj = await AI.findById(AIdoc._id);
-      let intervalTime = obj.candle / 60000;
-      candleTime = intervalTime + "m";
-      if (intervalTime >= 60) {
-        intervalTime = intervalTime / 60;
-        candleTime = intervalTime + "h";
-        if (intervalTime >= 24) {
-          intervalTime = intervalTime / 24;
-          candleTime = intervalTime + "d";
-        }
+  let api = await Api.findById(AIdoc.account);
+  let exchange = utils.getExchange(api);
+  let runInterval =  async()=>{
+    console.log("************************************");
+    console.log("          ");
+    let obj = await AI.findById(AIdoc._id);
+    let intervalTime = obj.candle / 60000;
+    candleTime = intervalTime + "m";
+    if (intervalTime >= 60) {
+      intervalTime = intervalTime / 60;
+      candleTime = intervalTime + "h";
+      if (intervalTime >= 24) {
+        intervalTime = intervalTime / 24;
+        candleTime = intervalTime + "d";
       }
+    }
+    let balance = await exchange.fetchBalance();
+    if (obj) {
+      if (obj.status == "stop") {
+        clearInterval(intervalID);
+        await AI.findByIdAndDelete(AIdoc._id);
+      } else {
+        await exchange.loadMarkets();
+        let market = exchange.markets[obj.symbol];
+        // console.log(market.taker);
+        // console.log(market.maker);
+        console.log(candleTime);
+        const candles = await exchange.fetchOHLCV(obj.symbol, candleTime);
+        const close = candles.map((c) => c[4]);
 
-      let balance = await exchange.fetchBalance();
-      if (
-        balance.free[obj.symbol.split("/")[1]] >= obj.investment &&
-        api.status
-      ) {
-        if (obj) {
-          if (obj.status == "stop") {
-            clearInterval(intervalID);
-            await AI.findByIdAndDelete(AIdoc._id);
-          } else {
-            await exchange.loadMarkets();
-            let market = exchange.markets["APT/BUSD"];
-            // console.log(market.taker);
-            // console.log(market.maker);
-            console.log(candleTime);
-            const candles = await exchange.fetchOHLCV("APT/BUSD", candleTime);
-            const close = candles.map((c) => c[4]);
+        const rsiPeriod = 14;
+        let rsiInput = {
+          values: close.slice(-rsiPeriod - 1),
+          period: rsiPeriod,
+        };
+        const rsi = await technicalindicators.RSI.calculate(rsiInput);
+        const lastRsi = rsi[rsi.length - 1];
 
-            const rsiPeriod = 14;
-            let rsiInput = {
-              values: close.slice(-rsiPeriod - 1),
-              period: rsiPeriod,
-            };
-            const rsi = await technicalindicators.RSI.calculate(rsiInput);
-            const lastRsi = rsi[rsi.length - 1];
+        const smaPeriod = 20;
+        const sma = technicalindicators.SMA.calculate({
+          values: close.slice(-smaPeriod),
+          period: smaPeriod,
+        });
+        const lastSma = sma[sma.length - 1];
 
-            const smaPeriod = 20;
-            const sma = technicalindicators.SMA.calculate({
-              values: close.slice(-smaPeriod),
-              period: smaPeriod,
-            });
-            const lastSma = sma[sma.length - 1];
+        const bbPeriod = 20;
+        const stdDev = 2;
+        const bb = technicalindicators.BollingerBands.calculate({
+          values: close.slice(-bbPeriod),
+          period: bbPeriod,
+          stdDev,
+        });
+        const lastBb = bb[bb.length - 1];
 
-            const bbPeriod = 20;
-            const stdDev = 2;
-            const bb = technicalindicators.BollingerBands.calculate({
-              values: close.slice(-bbPeriod),
-              period: bbPeriod,
-              stdDev,
-            });
-            const lastBb = bb[bb.length - 1];
+        console.log("RSI:", lastRsi);
+        console.log("SMA:", lastSma);
+        console.log("Bollinger Bands:", lastBb);
 
-            console.log("RSI:", lastRsi);
-            console.log("SMA:", lastSma);
-            console.log("Bollinger Bands:", lastBb);
+        // Fetch current ticker data
+        let ticker = await exchange.fetchTicker(AIdoc.symbol);
+        // Get last close price
+        let lastPrice = ticker["last"];
+        let order;
 
-            // Fetch current ticker data
-            let ticker = await exchange.fetchTicker(AIdoc.symbol);
-            // Get last close price
-            let lastPrice = ticker["last"];
-            let order;
-
-            if (!obj.currentBalance) {
-              obj.currentBalance = obj.investment;
-            }
-            if (!obj.amount) {
-              obj.amount = 0;
-            }
-            if (lastRsi <= obj.rsi_buy) {
-              // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
-              // Buy
-              order = await exchange.createOrder(
-                AIdoc.symbol,
-                "market",
-                "buy",
-                obj.currentBalance,
+        if (!obj.currentBalance) {
+          obj.currentBalance = obj.investment;
+        }
+        if (!obj.amount) {
+          obj.amount = 0;
+        }
+        if (
+          lastRsi <= obj.rsi_buy &&
+          balance.free[obj.symbol.split("/")[1]] >= obj.investment
+        ) {
+          // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
+          // Buy
+          try {
+            order = await exchange.createOrder(
+              AIdoc.symbol,
+              "market",
+              "buy",
+              obj.currentBalance
+            );
+            console.log(order);
+            obj.amount = order.executedQty;
+            sendTelegram(
+              "CapricornTrader buy " +
+                obj.symbol.split("/")[0] +
+                " with price: " +
                 lastPrice
-              );
-              console.log(order);
-              obj.amount = order.executedQty;
-              sendTelegram(
-                "CapricornTrader buy " +
-                  obj.symbol.split("/")[0] +
-                  " with price: " +
-                  lastPrice
-              );
-            }
-
-            if (obj.amount > 0 && lastRsi >= obj.rsi_sell) {
-              //Sell
-              order = await exchange.createOrder(
-                AIdoc.symbol,
-                "market",
-                "sell",
-                obj.amount,
-                lastPrice
-              );
-              console.log(order);
-              obj.currentBalance = obj.amount * lastPrice * (1 - market.maker);
-              obj.profit =
-                ((obj.currentBalance - obj.investment) / obj.investment) * 100;
-              sendTelegram(
-                "CapricornTrader sell " +
-                  obj.symbol.split("/")[0] +
-                  " with price: " +
-                  lastPrice
-              );
-            }
-            await obj.save();
+            );
+          } catch (error) {
+            console.log(error);
+            sendTelegram(
+              "have error when create order buy " +
+                obj.symbol.split("/")[1] +
+                " !!! RSI: " +
+                lastRsi
+            );
           }
         }
+
+        if (
+          balance.free[obj.symbol.split("/")[0]] >= obj.amount &&
+          lastRsi >= obj.rsi_sell
+        ) {
+          //Sell
+          try {
+            order = await exchange.createOrder(
+              AIdoc.symbol,
+              "market",
+              "sell",
+              obj.amount
+            );
+            console.log(order);
+            obj.currentBalance = obj.amount * lastPrice * (1 - market.maker);
+            obj.profit =
+              ((obj.currentBalance - obj.investment) / obj.investment) * 100;
+            sendTelegram(
+              "CapricornTrader sell " +
+                obj.symbol.split("/")[0] +
+                " with price: " +
+                lastPrice
+            );
+          } catch (error) {
+            console.log(error);
+            sendTelegram(
+              "have error when create order sell " +
+                obj.symbol.split("/")[0] +
+                " !!! RSI: " +
+                lastRsi
+            );
+          }
+        }
+        await obj.save();
       }
-    }, 30000);
-  } catch (error) {
-    console.log(error);
+    }
   }
+  runInterval();
+  let intervalID = setInterval(async () => {
+    runInterval();
+  }, 60000);
 }
 
 const resume = async (req, res) => {
