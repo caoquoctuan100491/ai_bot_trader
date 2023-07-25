@@ -179,7 +179,7 @@ async function run(AIdoc) {
             let order;
 
             if (!obj.currentBalance) {
-              obj.currentBalance = 0;
+              obj.currentBalance = obj.investment;
             }
             if (!obj.amount) {
               obj.amount = 0;
