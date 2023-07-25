@@ -95,7 +95,9 @@ const updateNewSymbol = async (req, res) => {
         for (let symbol in symbols) {
           if (!JSON.parse(array).includes(symbol)) {
             console.log(symbol);
-            sendTelegram("new symbol has listed on" + req.query.exchange +": " + symbol);
+            sendTelegram(
+              "new symbol has listed on" + req.query.exchange + ": " + symbol
+            );
           } else {
             console.log("exists");
           }
@@ -174,9 +176,14 @@ async function run(AIdoc) {
             let ticker = await exchange.fetchTicker(AIdoc.symbol);
             // Get last close price
             let lastPrice = ticker["last"];
-            console.log(lastPrice);
             let order;
 
+            if (!obj.currentBalance) {
+              obj.currentBalance = 0;
+            }
+            if (!obj.amount) {
+              obj.amount = 0;
+            }
             if (lastRsi <= obj.rsi_buy) {
               // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
               // Buy
@@ -197,10 +204,7 @@ async function run(AIdoc) {
               );
             }
 
-            if (
-              obj.amount > 0 &&
-              lastRsi >= obj.rsi_sell
-            ) {
+            if (obj.amount > 0 && lastRsi >= obj.rsi_sell) {
               //Sell
               order = await exchange.createOrder(
                 AIdoc.symbol,
