@@ -9,6 +9,7 @@ const technicalindicators = require("technicalindicators");
 const { query } = require("express");
 const { default: axios } = require("axios");
 const User = require("../models/User");
+const SocketIO = require("../socket/socket");
 
 const utils = {
   getExchange: (body) => {
@@ -112,7 +113,7 @@ const updateNewSymbol = async (req, res) => {
 async function run(AIdoc) {
   let api = await Api.findById(AIdoc.account);
   let exchange = utils.getExchange(api);
-  let runInterval =  async()=>{
+  let runInterval = async () => {
     console.log("************************************");
     console.log("          ");
     let obj = await AI.findById(AIdoc._id);
@@ -165,13 +166,14 @@ async function run(AIdoc) {
         const lastBb = bb[bb.length - 1];
 
         console.log("RSI:", lastRsi);
-        console.log("SMA:", lastSma);
-        console.log("Bollinger Bands:", lastBb);
+        // console.log("SMA:", lastSma);
+        // console.log("Bollinger Bands:", lastBb);
 
         // Fetch current ticker data
         let ticker = await exchange.fetchTicker(AIdoc.symbol);
         // Get last close price
         let lastPrice = ticker["last"];
+        console.log(lastPrice);
         let order;
 
         if (!obj.currentBalance) {
@@ -209,6 +211,7 @@ async function run(AIdoc) {
                 " !!! RSI: " +
                 lastRsi
             );
+            sendTelegram("error:" + error);
           }
         }
 
@@ -242,12 +245,13 @@ async function run(AIdoc) {
                 " !!! RSI: " +
                 lastRsi
             );
+            sendTelegram("error:" + error);
           }
         }
         await obj.save();
       }
     }
-  }
+  };
   runInterval();
   let intervalID = setInterval(async () => {
     runInterval();

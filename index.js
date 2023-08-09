@@ -4,9 +4,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const apiRouter = require("./routers/apiv1");
 const http = require("http");
-const socketio = require("socket.io");
 const exchangeAIController = require("./controllers/exchangeTrader");
-
+const socket = require("./socket/socket");
 const morgan = require("morgan");
 
 const app = express();
@@ -14,15 +13,8 @@ app.use(cors());
 
 // Cấu hình server http và socket.io
 const server = http.createServer(app);
-const io = socketio(server);
+socket.initializeSocket(server);
 
-io.on("connection", (socket) => {
-  console.log("New WebSocket connection");
-  socket.on("customEvent", (data) => {
-    console.log(data);
-  });
-  socket.emit("serverEvent", { data: "Hello from server" });
-});
 
 mongoose
   .connect(process.env.MONGODB_URI, {
