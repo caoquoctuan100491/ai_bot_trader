@@ -5,7 +5,8 @@ const User = require("../models/User");
 const register = async (req, res) => {
   const { username, password, email, phone } = req.body;
   const membership = "member";
-  const user = new User({ username, password, email, phone, membership });
+  var user = new User({ username, password, email, phone, membership });
+  user.eventListenNewSymbol = true;
   try {
     await user.save();
     res.send({ message: "User registered successfully" });

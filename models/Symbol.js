@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
 
 const SymbolSchema = new mongoose.Schema({
   exchange: String,

@@ -4,19 +4,24 @@ const AI = require("../models/AI");
 const Order = require("../models/Order");
 const Symbol = require("../models/Symbol");
 const Api = require("../models/Exchange_API");
+const User = require("../models/User");
+const EventListenNewSymbol = require("../models/EventListenNewSymbol");
 const ccxt = require("ccxt");
 const technicalindicators = require("technicalindicators");
 const { query } = require("express");
 const { default: axios } = require("axios");
-const User = require("../models/User");
+
 const SocketIO = require("../socket/socket");
 
 const utils = {
   getExchange: (body) => {
+    console.log(body);
     let exchangeId = body;
+
     if (body.exchange) {
       exchangeId = body.exchange;
     }
+    console.log(exchangeId);
     if (exchangeId.includes("-test")) {
       exchangeId = exchangeId.replace("-test", "");
     }
@@ -85,12 +90,11 @@ const fetchSymbols = async (req, res) => {
   }
 };
 
-const updateNewSymbol = async (req, res) => {
-  let user = await User.findById(req.user.id);
+const updateNewSymbol = async (user, exchange) => {
   let time = 24 * 60 * 1000;
   let intervalTime = setInterval(async () => {
-    if (user.eventUpdateNewSymbol) {
-      let array = await Symbol.find({ exchange: req.query.exchange });
+    if (user.eventListenNewSymbol) {
+      let array = await Symbol.find({ exchange: exchange});
       let symbols = await utils.getSymbols(req.query.exchange);
       if (array.length == 0) {
         for (let symbol in symbols) {
@@ -108,6 +112,28 @@ const updateNewSymbol = async (req, res) => {
       clearInterval(intervalTime);
     }
   }, time);
+};
+
+const toggleListentNewSymbol = async (req, res) => {
+  let obj = await EventListenNewSymbol.findOne({
+    userId: req.user.id,
+    exchange: req.body.exchange,
+  });
+
+  if (obj) {
+    if (obj.eventListenNewSymbol) {
+      obj.eventListenNewSymbol = false;
+    } else {
+      obj.eventListenNewSymbol = true;
+    }
+  } else {
+    obj = new EventListenNewSymbol(req.body.exchange, req.user.id, true);
+  }
+  try {
+    obj.save();
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 async function run(AIdoc) {
@@ -258,12 +284,14 @@ async function run(AIdoc) {
   }, 60000);
 }
 
-const resume = async (req, res) => {
+const resume = async () => {
   try {
     const aiTraders = await AI.find();
     aiTraders.forEach((aiTrader) => {
       run(aiTrader);
     });
+
+    const eventListenNewSymbol = await EventListenNewSymbol.find();
   } catch (err) {
     console.log(err);
   }
@@ -395,4 +423,5 @@ module.exports = {
   fetchBalance,
   fetchSymbols,
   updateNewSymbol,
+  toggleListentNewSymbol,
 };
