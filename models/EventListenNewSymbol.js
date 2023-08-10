@@ -11,6 +11,6 @@ EventListenNewSymbolSchema.pre("save", async function (next) {
   next();
 });
 
-const Symbol = mongoose.model("eventListenNewSymbol", EventListenNewSymbolSchema);
+const EventListenNewSymbol = mongoose.model("eventListenNewSymbol", EventListenNewSymbolSchema);
 
-module.exports = Symbol;
+module.exports = EventListenNewSymbol;

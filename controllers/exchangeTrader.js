@@ -15,13 +15,11 @@ const SocketIO = require("../socket/socket");
 
 const utils = {
   getExchange: (body) => {
-    console.log(body);
     let exchangeId = body;
 
     if (body.exchange) {
       exchangeId = body.exchange;
     }
-    console.log(exchangeId);
     if (exchangeId.includes("-test")) {
       exchangeId = exchangeId.replace("-test", "");
     }
@@ -76,37 +74,37 @@ const fetchBalance = async (req, res) => {
 
 const fetchSymbols = async (req, res) => {
   try {
-    let symbols = await Symbol.find({ exchange: req.query.exchange });
+    let exchange = req.query.exchange;
+    let symbols = await Symbol.find({ exchange: exchange });
     if (symbols.length == 0) {
-      symbols = await utils.getSymbols(req.query.exchange);
+      symbols = await utils.getSymbols(exchange);
       symbols.forEach((symbol) => {
-        let obj = new Symbol(req.query.exchange, symbol);
+        let obj = new Symbol({ symbol, exchange });
         obj.save();
       });
     }
     res.json(symbols);
   } catch (err) {
+    console.log(err);
     res.status(500).send({ message: err.message });
   }
 };
 
-const updateNewSymbol = async (user, exchange) => {
-  let time = 24 * 60 * 1000;
+const updateNewSymbol = async (obj) => {
+  let time = 1 * 60 * 1000;
   let intervalTime = setInterval(async () => {
-    if (user.eventListenNewSymbol) {
-      let array = await Symbol.find({ exchange: exchange});
-      let symbols = await utils.getSymbols(req.query.exchange);
-      if (array.length == 0) {
-        for (let symbol in symbols) {
-          if (!JSON.parse(array).includes(symbol)) {
-            console.log(symbol);
-            sendTelegram(
-              "new symbol has listed on" + req.query.exchange + ": " + symbol
-            );
-          } else {
-            console.log("exists");
+    if (obj.eventListenNewSymbol) {
+      let array = await Symbol.find({ exchange: obj.exchange });
+      let symbols = await utils.getSymbols(obj.exchange);
+      if (array.length > 0) {
+        array.forEach(objSymbol=>{
+          for (let symbol in symbols) {   
+            if (objSymbol.symbol === symbol) {
+              sendTelegram("new symbol has listed on" + exchange + ": " + symbol);
+            }
           }
-        }
+        })
+       
       }
     } else {
       clearInterval(intervalTime);
@@ -115,25 +113,38 @@ const updateNewSymbol = async (user, exchange) => {
 };
 
 const toggleListentNewSymbol = async (req, res) => {
+  try {
   let obj = await EventListenNewSymbol.findOne({
     userId: req.user.id,
     exchange: req.body.exchange,
   });
-
-  if (obj) {
-    if (obj.eventListenNewSymbol) {
-      obj.eventListenNewSymbol = false;
+ 
+    if (obj) {
+      if (obj.eventListenNewSymbol) {
+        obj.eventListenNewSymbol = false;
+      } else {
+        obj.eventListenNewSymbol = true;
+      }
     } else {
-      obj.eventListenNewSymbol = true;
+      let exchange = req.body.exchange;
+      let userId = req.user.id;
+      let eventListenNewSymbol = true;
+      obj = new EventListenNewSymbol({ exchange, userId, eventListenNewSymbol });
+      updateNewSymbol(obj);
     }
-  } else {
-    obj = new EventListenNewSymbol(req.body.exchange, req.user.id, true);
-  }
-  try {
     obj.save();
+    res.json(obj);
   } catch (error) {
     console.log(error);
   }
+};
+
+const statusListentNewSymbols = async (req, res) => {
+  let obj = await EventListenNewSymbol.findOne({
+    userId: req.user.id,
+    exchange: req.body.exchange,
+  });
+  res.json(obj);
 };
 
 async function run(AIdoc) {
@@ -243,6 +254,7 @@ async function run(AIdoc) {
 
         if (
           balance.free[obj.symbol.split("/")[0]] >= obj.amount &&
+          obj.amount > 0 &&
           lastRsi >= obj.rsi_sell
         ) {
           //Sell
@@ -292,6 +304,9 @@ const resume = async () => {
     });
 
     const eventListenNewSymbol = await EventListenNewSymbol.find();
+    eventListenNewSymbol.forEach((event) => {
+      updateNewSymbol(event);
+    });
   } catch (err) {
     console.log(err);
   }
@@ -369,7 +384,6 @@ const updateAI = async (AIdoc, data) => {
 
 const update = async (req, res) => {
   try {
-    console.log(req.params.id);
     let AIdoc = await AI.findById(req.params.id);
     if (AIdoc.userId.toString() !== req.user.id) {
       return res
@@ -424,4 +438,5 @@ module.exports = {
   fetchSymbols,
   updateNewSymbol,
   toggleListentNewSymbol,
+  statusListentNewSymbols,
 };
