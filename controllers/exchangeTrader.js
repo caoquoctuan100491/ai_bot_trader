@@ -91,20 +91,21 @@ const fetchSymbols = async (req, res) => {
 };
 
 const updateNewSymbol = async (obj) => {
-  let time = 1 * 60 * 1000;
+  let time = 24 * 60 * 60 * 1000;
   let intervalTime = setInterval(async () => {
     if (obj.eventListenNewSymbol) {
       let array = await Symbol.find({ exchange: obj.exchange });
       let symbols = await utils.getSymbols(obj.exchange);
       if (array.length > 0) {
-        array.forEach(objSymbol=>{
-          for (let symbol in symbols) {   
+        array.forEach((objSymbol) => {
+          for (let symbol in symbols) {
             if (objSymbol.symbol === symbol) {
-              sendTelegram("new symbol has listed on" + exchange + ": " + symbol);
+              sendTelegram(
+                "new symbol has listed on" + exchange + ": " + symbol
+              );
             }
           }
-        })
-       
+        });
       }
     } else {
       clearInterval(intervalTime);
@@ -114,11 +115,11 @@ const updateNewSymbol = async (obj) => {
 
 const toggleListentNewSymbol = async (req, res) => {
   try {
-  let obj = await EventListenNewSymbol.findOne({
-    userId: req.user.id,
-    exchange: req.body.exchange,
-  });
- 
+    let obj = await EventListenNewSymbol.findOne({
+      userId: req.user.id,
+      exchange: req.body.exchange,
+    });
+
     if (obj) {
       if (obj.eventListenNewSymbol) {
         obj.eventListenNewSymbol = false;
@@ -129,7 +130,11 @@ const toggleListentNewSymbol = async (req, res) => {
       let exchange = req.body.exchange;
       let userId = req.user.id;
       let eventListenNewSymbol = true;
-      obj = new EventListenNewSymbol({ exchange, userId, eventListenNewSymbol });
+      obj = new EventListenNewSymbol({
+        exchange,
+        userId,
+        eventListenNewSymbol,
+      });
       updateNewSymbol(obj);
     }
     obj.save();
