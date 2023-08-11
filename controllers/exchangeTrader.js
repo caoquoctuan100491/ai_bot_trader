@@ -147,8 +147,9 @@ const toggleListentNewSymbol = async (req, res) => {
 const statusListentNewSymbols = async (req, res) => {
   let obj = await EventListenNewSymbol.findOne({
     userId: req.user.id,
-    exchange: req.body.exchange,
+    exchange: req.query.exchange,
   });
+  console.log(obj);
   res.json(obj);
 };
 
