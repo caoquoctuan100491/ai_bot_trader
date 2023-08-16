@@ -245,7 +245,7 @@ async function run(AIdoc) {
             );
 
             obj.currentBalance = 0;
-            obj.amount = order.amount;
+            obj.amount = (order.amount - order.amount* market.taker).toFixed(4);
             sendTelegram(
               "CapricornTrader buy " +
                 obj.symbol.split("/")[0] +
