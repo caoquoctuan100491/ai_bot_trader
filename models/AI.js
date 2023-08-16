@@ -6,15 +6,17 @@ const AISchema = new mongoose.Schema({
   account: String,
   symbol: String,
   candle: Number,
-  investment: Number,
-  currentBalance:Number,
+  investment: String,
+  currentBalance: String,
   rsi_buy: Number,
   rsi_sell: Number,
   stop_loss: Number,
   take_profit: Number,
   userId: String,
-  amount:Number,
-  profit: Number,
+  amount: String,
+  profit: String,
+  currentProfit: String,
+  currentRSI: String
 });
 
 AISchema.pre("save", async function (next) {

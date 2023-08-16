@@ -191,6 +191,7 @@ async function run(AIdoc) {
         };
         const rsi = await technicalindicators.RSI.calculate(rsiInput);
         const lastRsi = rsi[rsi.length - 1];
+        obj.currentRSI = lastRsi;
 
         const smaPeriod = 20;
         const sma = technicalindicators.SMA.calculate({
@@ -216,43 +217,58 @@ async function run(AIdoc) {
         let ticker = await exchange.fetchTicker(AIdoc.symbol);
         // Get last close price
         let lastPrice = ticker["last"];
-        console.log(lastPrice);
         let order;
-
+        console.log("LastPrice: " + lastPrice);
         if (!obj.currentBalance) {
-          obj.currentBalance = obj.investment;
+          obj.currentBalance = parseFloat(obj.investment);
         }
         if (!obj.amount) {
           obj.amount = 0;
         }
+        obj.currentProfit =
+        (( balance.free[obj.symbol.split("/")[0]]*lastPrice - obj.investment) / obj.investment) * 100;
+        let amountToBuy = (parseFloat(obj.currentBalance) / lastPrice).toFixed(
+          4
+        );
         if (
           lastRsi <= obj.rsi_buy &&
-          balance.free[obj.symbol.split("/")[1]] >= obj.investment
+          balance.free[obj.symbol.split("/")[1]] >=
+            parseFloat(obj.currentBalance) &&
+          amountToBuy >= market.precision.amount
         ) {
           // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
           // Buy
           try {
-            order = await exchange.createOrder(
+            order = await exchange.createMarketBuyOrder(
               AIdoc.symbol,
-              "market",
-              "buy",
-              obj.currentBalance
+              amountToBuy
             );
-            console.log(order);
-            obj.amount = order.executedQty;
+
+            obj.currentBalance = 0;
+            obj.amount = order.amount;
             sendTelegram(
               "CapricornTrader buy " +
                 obj.symbol.split("/")[0] +
                 " with price: " +
-                lastPrice
+                lastPrice +
+                " at RSI: " +
+                lastRsi
             );
+            let objOrder = new Order(obj);
+            objOrder.save();
           } catch (error) {
             console.log(error);
             sendTelegram(
-              "have error when create order buy " +
-                obj.symbol.split("/")[1] +
+              "[Error] Create order buy " +
+                amountToBuy +
+                obj.symbol.split("/")[0] +
                 " !!! RSI: " +
-                lastRsi + "at price " + lastPrice +"with " + obj.currentBalance
+                lastRsi +
+                " at price " +
+                lastPrice +
+                " with " +
+                obj.currentBalance +
+                obj.symbol.split("/")[1]
             );
             sendTelegram("error:" + error);
           }
@@ -279,15 +295,23 @@ async function run(AIdoc) {
               "CapricornTrader sell " +
                 obj.symbol.split("/")[0] +
                 " with price: " +
-                lastPrice
+                lastPrice +
+                " at RSI: " +
+                lastRsi
             );
+            let objOrder = new Order(obj);
+            objOrder.save();
           } catch (error) {
             console.log(error);
             sendTelegram(
               "have error when create order sell " +
                 obj.symbol.split("/")[0] +
                 " !!! RSI: " +
-                lastRsi + "at price " + lastPrice +"with " + obj.amount
+                lastRsi +
+                " at price " +
+                lastPrice +
+                " with " +
+                obj.amount
             );
             sendTelegram("error:" + error);
           }
