@@ -252,7 +252,7 @@ async function run(AIdoc) {
               "have error when create order buy " +
                 obj.symbol.split("/")[1] +
                 " !!! RSI: " +
-                lastRsi
+                lastRsi + "at price " + lastPrice +"with " + obj.currentBalance
             );
             sendTelegram("error:" + error);
           }
@@ -287,7 +287,7 @@ async function run(AIdoc) {
               "have error when create order sell " +
                 obj.symbol.split("/")[0] +
                 " !!! RSI: " +
-                lastRsi
+                lastRsi + "at price " + lastPrice +"with " + obj.amount
             );
             sendTelegram("error:" + error);
           }
