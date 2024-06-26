@@ -382,6 +382,8 @@ const start = async (req, res) => {
 const getListAITrader = async (req, res) => {
   try {
     const aiTraders = await AI.find({ userId: req.user.id });
+    console.log(aiTraders);
+    // await AI.findByIdAndDelete(req.params.id);
     res.json(aiTraders);
   } catch (err) {
     res.status(500).json({ message: err.message });
