@@ -15,6 +15,20 @@ const register = async (req, res) => {
   }
 };
 
+const verify = async (req, res) => {
+  const token = req.header("auth-token");
+  if (!token) return res.status(401).send({ message: "Access Denied" });
+  else {
+    try {
+      const verified = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = verified;
+      res.send({ message: "Verified" });
+    } catch (err) {
+      res.status(400).send({ message: "Invalid Token" });
+    }
+  }
+};
+
 const login = async (req, res) => {
   const { username, password } = req.body;
 
