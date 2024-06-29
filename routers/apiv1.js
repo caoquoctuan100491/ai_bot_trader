@@ -8,6 +8,7 @@ const router = express.Router();
 const apiRoute = (app) => {
   router.post("/register", userController.register);
   router.post("/login", userController.login);
+  router.post("/verify",auth);
 
   router.post("/api", auth, exchangeAPIController.addAPI);
   router.get("/get_Api", auth, exchangeAPIController.getListAPI);
