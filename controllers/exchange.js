@@ -42,6 +42,7 @@ const Follow = () => {
     let message = "";
     for (let i = 0; i < arrInterval.length; i++) {
       if (data.chatId == chatId && arrInterval[i].exchange === data.exchange && arrInterval[i].symbol === data.symbol) {
+        console.log("Already following");
         clearInterval(arrInterval[i].interval);
         arrInterval.splice(i, 1);
       }
@@ -63,7 +64,7 @@ const Follow = () => {
     }, intervalTime);
     arrInterval.push(data);
   };
-  
+
   const unfollow = async (chatId, data) => {
     for (let i = 0; i < arrInterval.length; i++) {
       if (data.chatId == chatId && arrInterval[i].exchange === data.exchange && arrInterval[i].symbol === data.symbol) {
