@@ -19,6 +19,7 @@
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.3.1",
     "morgan": "^1.10.0",
+    "node-telegram-bot-api": "^0.66.0",
     "nodemon": "^2.0.22",
     "socket.io": "^4.7.1",
     "technicalindicators": "^3.1.0",

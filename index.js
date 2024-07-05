@@ -7,6 +7,7 @@ const http = require("http");
 const exchangeAIController = require("./controllers/exchangeTrader");
 const socket = require("./socket/socket");
 const morgan = require("morgan");
+const teleController = require("./controllers/telegramController");
 
 const app = express();
 app.use(cors());
@@ -14,7 +15,6 @@ app.use(cors());
 // Cấu hình server http và socket.io
 const server = http.createServer(app);
 socket.initializeSocket(server);
-
 
 mongoose
   .connect(process.env.MONGODB_URI, {
@@ -30,6 +30,4 @@ apiRouter(app);
 
 exchangeAIController.resume();
 
-server.listen(process.env.PORT, () =>
-  console.log(`Server started on port ${process.env.PORT}`)
-);
+server.listen(process.env.PORT, () => console.log(`Server started on port ${process.env.PORT}`));
