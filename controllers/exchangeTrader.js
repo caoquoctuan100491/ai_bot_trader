@@ -12,6 +12,7 @@ const { query } = require("express");
 const { default: axios } = require("axios");
 
 const SocketIO = require("../socket/socket");
+const { get } = require("mongoose");
 
 const utils = {
   getExchange: (body) => {
@@ -61,9 +62,7 @@ const fetchBalance = async (req, res) => {
   try {
     let obj = await Api.findById(req.query.id);
     if (obj.userId.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You do not have permission to update this API." });
+      return res.status(403).json({ message: "You do not have permission to update this API." });
     }
     let balance = await utils.getBalance(obj);
     res.json(balance);
@@ -100,9 +99,7 @@ const updateNewSymbol = async (obj) => {
         array.forEach((objSymbol) => {
           for (let symbol in symbols) {
             if (objSymbol.symbol === symbol) {
-              sendTelegram(
-                "new symbol has listed on" + exchange + ": " + symbol
-              );
+              sendTelegram("new symbol has listed on" + exchange + ": " + symbol);
             }
           }
         });
@@ -184,29 +181,14 @@ async function run(AIdoc) {
         const candles = await exchange.fetchOHLCV(obj.symbol, candleTime);
         const close = candles.map((c) => c[4]);
 
-        const rsiPeriod = 14;
-        let rsiInput = {
-          values: close.slice(-rsiPeriod - 1),
-          period: rsiPeriod,
-        };
-        const rsi = await technicalindicators.RSI.calculate(rsiInput);
+        const rsi = await getRSI(close, 14);
         const lastRsi = rsi[rsi.length - 1];
         obj.currentRSI = lastRsi;
 
-        const smaPeriod = 20;
-        const sma = technicalindicators.SMA.calculate({
-          values: close.slice(-smaPeriod),
-          period: smaPeriod,
-        });
+        const sma = await getSMA(close, 20);
         const lastSma = sma[sma.length - 1];
 
-        const bbPeriod = 20;
-        const stdDev = 2;
-        const bb = technicalindicators.BollingerBands.calculate({
-          values: close.slice(-bbPeriod),
-          period: bbPeriod,
-          stdDev,
-        });
+        const bb = await getBB(close, 20, 2);
         const lastBb = bb[bb.length - 1];
 
         console.log("RSI:", lastRsi);
@@ -225,35 +207,17 @@ async function run(AIdoc) {
         if (!obj.amount) {
           obj.amount = 0;
         }
-        obj.currentProfit =
-        (( balance.free[obj.symbol.split("/")[0]]*lastPrice - obj.investment) / obj.investment) * 100;
-        let amountToBuy = (parseFloat(obj.currentBalance) / lastPrice).toFixed(
-          4
-        );
-        if (
-          lastRsi <= obj.rsi_buy &&
-          balance.free[obj.symbol.split("/")[1]] >=
-            parseFloat(obj.currentBalance) &&
-          amountToBuy >= market.precision.amount
-        ) {
+        obj.currentProfit = ((balance.free[obj.symbol.split("/")[0]] * lastPrice - obj.investment) / obj.investment) * 100;
+        let amountToBuy = (parseFloat(obj.currentBalance) / lastPrice).toFixed(4);
+        if (lastRsi <= obj.rsi_buy && balance.free[obj.symbol.split("/")[1]] >= parseFloat(obj.currentBalance) && amountToBuy >= market.precision.amount) {
           // lastRsi <= obj.rsi_buy && lastPrice > lastSma && lastPrice < lastBb.lower
           // Buy
           try {
-            order = await exchange.createMarketBuyOrder(
-              AIdoc.symbol,
-              amountToBuy
-            );
+            order = await exchange.createMarketBuyOrder(AIdoc.symbol, amountToBuy);
 
             obj.currentBalance = 0;
-            obj.amount = (order.amount - order.amount* market.taker).toFixed(4);
-            sendTelegram(
-              "CapricornTrader buy " +
-                obj.symbol.split("/")[0] +
-                " with price: " +
-                lastPrice +
-                " at RSI: " +
-                lastRsi
-            );
+            obj.amount = (order.amount - order.amount * market.taker).toFixed(4);
+            sendTelegram("CapricornTrader buy " + obj.symbol.split("/")[0] + " with price: " + lastPrice + " at RSI: " + lastRsi);
             let objOrder = new Order(obj);
             objOrder.save();
           } catch (error) {
@@ -274,44 +238,20 @@ async function run(AIdoc) {
           }
         }
 
-        if (
-          balance.free[obj.symbol.split("/")[0]] >= obj.amount &&
-          obj.amount > 0 &&
-          lastRsi >= obj.rsi_sell
-        ) {
+        if (balance.free[obj.symbol.split("/")[0]] >= obj.amount && obj.amount > 0 && lastRsi >= obj.rsi_sell) {
           //Sell
           try {
-            order = await exchange.createOrder(
-              AIdoc.symbol,
-              "market",
-              "sell",
-              obj.amount
-            );
+            order = await exchange.createOrder(AIdoc.symbol, "market", "sell", obj.amount);
             console.log(order);
             obj.currentBalance = obj.amount * lastPrice * (1 - market.maker);
-            obj.profit =
-              ((obj.currentBalance - obj.investment) / obj.investment) * 100;
-            sendTelegram(
-              "CapricornTrader sell " +
-                obj.symbol.split("/")[0] +
-                " with price: " +
-                lastPrice +
-                " at RSI: " +
-                lastRsi
-            );
+            obj.profit = ((obj.currentBalance - obj.investment) / obj.investment) * 100;
+            sendTelegram("CapricornTrader sell " + obj.symbol.split("/")[0] + " with price: " + lastPrice + " at RSI: " + lastRsi);
             let objOrder = new Order(obj);
             objOrder.save();
           } catch (error) {
             console.log(error);
             sendTelegram(
-              "have error when create order sell " +
-                obj.symbol.split("/")[0] +
-                " !!! RSI: " +
-                lastRsi +
-                " at price " +
-                lastPrice +
-                " with " +
-                obj.amount
+              "have error when create order sell " + obj.symbol.split("/")[0] + " !!! RSI: " + lastRsi + " at price " + lastPrice + " with " + obj.amount
             );
             sendTelegram("error:" + error);
           }
@@ -346,9 +286,7 @@ const start = async (req, res) => {
   let body = req.body;
   let obj = await Api.findById(body.account);
   if (obj.userId.toString() !== req.user.id) {
-    return res
-      .status(403)
-      .json({ message: "You do not have permission to update this API." });
+    return res.status(403).json({ message: "You do not have permission to update this API." });
   }
 
   // let exchange = utils.getExchange(obj);
@@ -394,9 +332,7 @@ const stop = async (req, res) => {
   try {
     let api = await AI.findById(req.params.id);
     if (api.userId.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You do not have permission to delete this API." });
+      return res.status(403).json({ message: "You do not have permission to delete this API." });
     }
     await AI.findByIdAndDelete(req.params.id);
     res.json({ message: "API has been deleted" });
@@ -418,9 +354,7 @@ const update = async (req, res) => {
   try {
     let AIdoc = await AI.findById(req.params.id);
     if (AIdoc.userId.toString() !== req.user.id) {
-      return res
-        .status(403)
-        .json({ message: "You do not have permission to update this API." });
+      return res.status(403).json({ message: "You do not have permission to update this API." });
     }
     await updateAI(AIdoc, req.body);
     res.json({ message: "Updated" });
@@ -430,8 +364,7 @@ const update = async (req, res) => {
 };
 
 const sendTelegram = async (sendMSG) => {
-  let telegram_api =
-    "https://api.telegram.org/bot6379516028:AAEScTUM7Peg7LQXb0mqdXo-fgDiycrEYEM";
+  let telegram_api = "https://api.telegram.org/bot6379516028:AAEScTUM7Peg7LQXb0mqdXo-fgDiycrEYEM";
   let telegramId = await getTelegramId(telegram_api, "MardSilver", "userId");
   await axios.post(telegram_api + "/sendMessage", {
     chat_id: 1856763891,
@@ -445,9 +378,7 @@ let getTelegramId = async (telegram_api, title, type) => {
   for (let index = 0; index < getUpdatesResult.length; index++) {
     const element = getUpdatesResult[index];
     if (element.my_chat_member && type === "chatId") {
-      if (
-        element.my_chat_member.chat.title.toLowerCase() === title.toLowerCase()
-      ) {
+      if (element.my_chat_member.chat.title.toLowerCase() === title.toLowerCase()) {
         return element.my_chat_member.chat.id;
       }
     }
@@ -458,6 +389,34 @@ let getTelegramId = async (telegram_api, title, type) => {
       }
     }
   }
+};
+
+let getRSI = async (close, rsiPeriod) => {
+  let rsiInput = {
+    values: close.slice(-rsiPeriod - 1),
+    period: rsiPeriod,
+  };
+  const rsi = await technicalindicators.RSI.calculate(rsiInput);
+  return rsi;
+};
+
+let getBB = async (close, bbPeriod, stdDev) => {
+  const bb = technicalindicators.BollingerBands.calculate({
+    values: close.slice(-bbPeriod),
+    period: bbPeriod,
+    stdDev,
+  });
+  return bb;
+};
+
+let getEMA = async (close, emaPeriod) => {};
+
+let getSMA = async (close, smaPeriod) => {
+  const sma = technicalindicators.SMA.calculate({
+    values: close.slice(-smaPeriod),
+    period: smaPeriod,
+  });
+  return sma;
 };
 
 module.exports = {
@@ -471,4 +430,8 @@ module.exports = {
   updateNewSymbol,
   toggleListentNewSymbol,
   statusListentNewSymbols,
+  getRSI,
+  getBB,
+  getEMA,
+  getSMA,
 };
