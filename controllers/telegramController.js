@@ -15,7 +15,6 @@ const bot = new TelegramBot(token, { polling: true });
 bot.onText(/\/note (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const resp = match[1];
-
   bot.sendMessage(chatId, resp);
 });
 
@@ -84,13 +83,28 @@ bot.on("message", async (msg) => {
   switch (msg.text) {
     case "/start":
       res = await userController.login(chatId);
+      res.message +="\n" + notes(chatId);
       break;
     case "/getSymbols":
       break;
     case "/notes":
+      res = notes(chatId);
       break;
   }
   if (res) {
-    bot.sendMessage(chatId, res.message0000000000);
+    bot.sendMessage(chatId, res.message);
   }
 });
+
+const notes = (chatId)=>{
+  let message = "Notes: \n";
+  message += "/notes to get list note\n";
+  message += "/followSRI exchange symbol timeFrame intervalTime period top bottom\n";
+  message += "/unfollow exchange symbol\n";
+  message += "/getApis\n";
+  message += "/setApi exchange apiKey secretKey displayName status\n";
+  message += "/getBalance exchange\n";
+  message += "/checkExchange exchange\n";
+  message += "/startBot exchange\n";
+  return message;
+}
