@@ -8,6 +8,7 @@ const APISchema = new mongoose.Schema({
   exchange: String,
   userId: String,
   status: Boolean,
+  chatId: String,
 });
 
 APISchema.pre("save", async function (next) {

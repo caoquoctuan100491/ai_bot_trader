@@ -40,18 +40,19 @@ bot.onText(/\/setApi (.+)/, (msg, match) => {
   bot.sendMessage(chatId, resp);
 });
 
-bot.onText(/\/getApis (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const resp = match[1];
-
-  bot.sendMessage(chatId, resp);
-});
-
 bot.onText(/\/startBot (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const resp = match[1];
-
-  bot.sendMessage(chatId, resp);
+  let req = resp.split(" ");
+  let data = {
+    displayName: req[0],
+    symbol: req[1],
+    invest: parseFloat(req[2]),
+    sri: parseInt(req[3]),
+    top: parseFloat(req[4]),
+    bottom: parseFloat(req[5]),
+  };
+  exchangeController.BotTrader().start(chatId, bot, data);
 });
 
 bot.onText(/\/checkExchange (.+)/, (msg, match) => {
@@ -83,12 +84,15 @@ bot.on("message", async (msg) => {
   switch (msg.text) {
     case "/start":
       res = await userController.login(chatId);
-      res.message +="\n" + notes(chatId);
+      res.message += "\n" + notes(chatId);
       break;
     case "/getSymbols":
       break;
     case "/notes":
       res = notes(chatId);
+      break;
+    case "/getApis":
+      exchangeController.API().getApis(chatId, bot);
       break;
   }
   if (res) {
@@ -96,7 +100,7 @@ bot.on("message", async (msg) => {
   }
 });
 
-const notes = (chatId)=>{
+const notes = (chatId) => {
   let message = "Notes: \n";
   message += "/notes to get list note\n";
   message += "/followSRI exchange symbol timeFrame intervalTime period top bottom\n";
@@ -105,6 +109,6 @@ const notes = (chatId)=>{
   message += "/setApi exchange apiKey secretKey displayName status\n";
   message += "/getBalance exchange\n";
   message += "/checkExchange exchange\n";
-  message += "/startBot exchange\n";
+  message += "/startBot displayName symbol invest sri top bottom\n";
   return message;
-}
+};
