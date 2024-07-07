@@ -51,7 +51,7 @@ bot.onText(/\/startBot (.+)/, (msg, match) => {
     sri: parseInt(req[3]),
     top: parseFloat(req[4]),
     bottom: parseFloat(req[5]),
-    
+
   };
   exchangeController.BotTrader().start(chatId, bot, data);
 });
@@ -111,5 +111,5 @@ const notes = (chatId) => {
   message += "/getBalance exchange\n";
   message += "/checkExchange exchange\n";
   message += "/startBot displayName symbol invest sri top bottom\n";
-  return message;
+  return {message};
 };
