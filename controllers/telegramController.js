@@ -47,10 +47,11 @@ bot.onText(/\/startBot (.+)/, (msg, match) => {
   let data = {
     displayName: req[0],
     symbol: req[1],
-    invest: parseFloat(req[2]),
+    investment: parseFloat(req[2]),
     sri: parseInt(req[3]),
     top: parseFloat(req[4]),
     bottom: parseFloat(req[5]),
+    
   };
   exchangeController.BotTrader().start(chatId, bot, data);
 });

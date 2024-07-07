@@ -2,6 +2,7 @@ const ccxt = require("ccxt");
 const RSI = require("technicalindicators").RSI;
 const Api = require("../models/Exchange_API");
 const AI = require("../models/AI");
+const Order = require("../models/Order");
 let arrInterval = [];
 
 const BotTrader = () => {
@@ -33,14 +34,20 @@ const BotTrader = () => {
         let fecthBalance = await exchange.fetchBalance();
         let balance = fecthBalance.free[data.symbol.split("/")[0]];
         let price = ticker.last.toFixed(4);
-        let amount = (balance * data.investment) / price;
-        let order = {
-          symbol: data.symbol,
-          type: side,
-          amount: amount,
-          price: price,
-          side: data.side,
-        };
+        data.amount = (balance * data.investment) / price;
+        // let order = {
+        //   exchange: data.exchange,
+        //   status: side,
+        //   symbol: data.symbol,
+        //   candle: data.timeFrame,
+        //   investment: data.investment,
+        //   rsi_buy: data.top,
+        //   rsi_sell: data.bottom,
+        //   stop_loss: data.stopLoss,
+        //   take_profit: data.takeProfit,
+        //   amount: amount,
+        //   profit: 0,
+        // };
         let orderId = await exchange.createOrder(data.symbol, data.side, side, amount, price);
 
         let ai = new AI(order);

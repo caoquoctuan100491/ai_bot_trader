@@ -1,21 +1,15 @@
 const mongoose = require("mongoose");
 
 const OrderSchema = new mongoose.Schema({
-  exchange: String,
   status: String,
-  account: String,
+  displayName: String,
   symbol: String,
   candle: Number,
-  investment: Number,
-  currentBalance:Number,
-  rsi_buy: Number,
-  rsi_sell: Number,
-  stop_loss: Number,
-  take_profit: Number,
-  userId: String,
-  amount:Number,
-  profit: Number,
-  orderId:String
+  chatId: String,
+  amount: Number,
+  price: Number,
+  aiId: String,
+  orderId: String,
 });
 
 OrderSchema.pre("save", async function (next) {

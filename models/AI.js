@@ -1,22 +1,20 @@
 const mongoose = require("mongoose");
 
 const AISchema = new mongoose.Schema({
-  exchange: String,
+  displayName: String,
   status: String,
-  account: String,
   symbol: String,
   candle: Number,
   investment: String,
-  currentBalance: String,
+  startBalance: String,
   rsi_buy: Number,
   rsi_sell: Number,
   stop_loss: Number,
   take_profit: Number,
-  userId: String,
-  amount: String,
+  chatId: String,
   profit: String,
   currentProfit: String,
-  currentRSI: String
+  currentRSI: String,
 });
 
 AISchema.pre("save", async function (next) {
