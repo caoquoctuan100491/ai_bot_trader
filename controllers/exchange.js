@@ -24,7 +24,7 @@ const BotTrader = () => {
     data.interval = setInterval(async () => {
       let exchange = new ccxt[data.exchange]();
       // const ticker = await exchange.fetchTicker(data.symbol);
-      const lastPrice = await getCurrentPrice(data.exchange, data.symbol);
+      const lastPrice = await getCurrentPrice(exchange, data.symbol);
       let rsi = await getRSI(data);
 
       if (rsi.nextValue(lastPrice) >= data.top) {
@@ -187,7 +187,7 @@ const Follow = () => {
     data.interval = setInterval(async () => {
       let exchange = new ccxt[data.exchange]();
       // const ticker = await exchange.fetchTicker(data.symbol);
-      const lastPrice = await getCurrentPrice(data.exchange, data.symbol);
+      const lastPrice = await getCurrentPrice(exchange, data.symbol);
       let rsi = await getRSI(data);
       message = "RSI: " + rsi.nextValue(lastPrice) + "\n";
       message += "Price: " + lastPrice + "\n";
