@@ -23,6 +23,7 @@
     "nodemon": "^2.0.22",
     "socket.io": "^4.7.1",
     "technicalindicators": "^3.1.0",
-    "winston": "^3.9.0"
+    "winston": "^3.9.0",
+    "ws": "^8.18.0"
   }
 }

@@ -3,6 +3,7 @@ const RSI = require("technicalindicators").RSI;
 const Api = require("../models/Exchange_API");
 const AI = require("../models/AI");
 const Order = require("../models/Order");
+const WebSocket = require("ws");
 let arrInterval = [];
 
 const BotTrader = () => {
@@ -181,6 +182,7 @@ const Follow = () => {
       }
     }
     data.chatId = chatId;
+    console.log(data.chatId + " followSRI " + data.symbol + "SRI " + data.period + " " + data.top + " - " + data.bottom);
     data.interval = setInterval(async () => {
       let exchange = new ccxt[data.exchange]();
       const ticker = await exchange.fetchTicker(data.symbol);
