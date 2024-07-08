@@ -23,18 +23,19 @@ const BotTrader = () => {
     let side;
     data.interval = setInterval(async () => {
       let exchange = new ccxt[data.exchange]();
-      const ticker = await exchange.fetchTicker(data.symbol);
+      // const ticker = await exchange.fetchTicker(data.symbol);
+      const lastPrice = await getCurrentPrice(data.exchange, data.symbol);
       let rsi = await getRSI(data);
 
-      if (rsi.nextValue(ticker.last) >= data.top) {
+      if (rsi.nextValue(lastPrice) >= data.top) {
         side = "sell";
-      } else if (rsi.nextValue(ticker.last) <= data.bottom) {
+      } else if (rsi.nextValue(lastPrice) <= data.bottom) {
         side = "buy";
       }
       if (side != undefined) {
         let fecthBalance = await exchange.fetchBalance();
         let balance = fecthBalance.free[data.symbol.split("/")[0]];
-        let price = ticker.last.toFixed(4);
+        let price = lastPrice.toFixed(4);
         data.amount = (balance * data.investment) / price;
         // let order = {
         //   exchange: data.exchange,
@@ -185,14 +186,15 @@ const Follow = () => {
     console.log(data.chatId + " followSRI " + data.symbol + "SRI " + data.period + " " + data.top + " - " + data.bottom);
     data.interval = setInterval(async () => {
       let exchange = new ccxt[data.exchange]();
-      const ticker = await exchange.fetchTicker(data.symbol);
+      // const ticker = await exchange.fetchTicker(data.symbol);
+      const lastPrice = await getCurrentPrice(data.exchange, data.symbol);
       let rsi = await getRSI(data);
-      message = "RSI: " + rsi.nextValue(ticker.last) + "\n";
-      message += "Price: " + ticker.last + "\n";
-      if (rsi.nextValue(ticker.last) >= data.top) {
+      message = "RSI: " + rsi.nextValue(lastPrice) + "\n";
+      message += "Price: " + lastPrice + "\n";
+      if (rsi.nextValue(lastPrice) >= data.top) {
         message = "Exceeded selling point." + "\n" + message;
         bot.sendMessage(chatId, message);
-      } else if (rsi.nextValue(ticker.last) <= data.bottom) {
+      } else if (rsi.nextValue(lastPrice) <= data.bottom) {
         message = "Exceeded buying point." + "\n" + message;
         bot.sendMessage(chatId, message);
       }
@@ -216,7 +218,6 @@ const Follow = () => {
 
 const getRSI = async (data) => {
   let exchange = new ccxt[data.exchange]();
-  const ticker = await exchange.fetchTicker(data.symbol);
   let ohlcv = await exchange.fetchOHLCV(data.symbol, data.timeFrame);
   const entries = ohlcv.map((entry) => ({
     time: entry[0],
@@ -234,6 +235,44 @@ const getRSI = async (data) => {
   };
   let rsi = new RSI(input);
   return rsi;
+};
+
+const getCurrentPrice = async (exchange, symbol) => {
+  try {
+    const strSymbol = symbol.replace("/", "").toLowerCase();
+    let url = "";
+    let wsURL = "";
+    if (exchange === "binance") {
+      url = "wss://stream.binance.com:9443/ws/";
+      wsURL = url + strSymbol + "@ticker";
+    }
+
+    // Kết nối WebSocket
+    const ws = new WebSocket(wsURL);
+
+    ws.on("open", () => {
+      console.log("WebSocket kết nối thành công");
+    });
+
+    ws.on("message", (data) => {
+      const ticker = JSON.parse(data);
+
+      // Lấy giá hiện tại từ ticker
+      const price = ticker.c; // 'c' là giá hiện tại (last price)
+      console.log(`Giá hiện tại của BTC/USDT: ${price}`);
+      return price;
+    });
+
+    ws.on("error", (error) => {
+      console.error("WebSocket error:", error);
+    });
+
+    ws.on("close", () => {
+      console.log("WebSocket đóng kết nối");
+    });
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 module.exports = {
