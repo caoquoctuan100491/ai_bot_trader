@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { exchanges } = require('ccxt');
 
 const UserSchema = new mongoose.Schema({
     chatId: String,
@@ -10,6 +11,7 @@ const UserSchema = new mongoose.Schema({
     expiresIn:String,
     membership:String,
     telegram:String,
+    exchange: String,
 });
 
 UserSchema.pre('save', async function(next) {

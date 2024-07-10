@@ -18,6 +18,13 @@ bot.onText(/\/note (.+)/, (msg, match) => {
   bot.sendMessage(chatId, resp);
 });
 
+bot.onText(/\/setExchange (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const exchangeName = match[1];
+  exchangeController.BotTrader().setExchange(chatId, bot, exchangeName);
+  // bot.sendMessage(chatId, resp);
+});
+
 bot.onText(/\/getBalance (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const resp = match[1];
@@ -45,15 +52,22 @@ bot.onText(/\/startBot (.+)/, (msg, match) => {
   const resp = match[1];
   let req = resp.split(" ");
   let data = {
-    displayName: req[0],
-    symbol: req[1],
+    symbol: req[0],
+    displayName: req[1],
     investment: parseFloat(req[2]),
-    sri: parseInt(req[3]),
-    top: parseFloat(req[4]),
-    bottom: parseFloat(req[5]),
-
   };
   exchangeController.BotTrader().start(chatId, bot, data);
+});
+
+bot.onText(/\/botStatus (.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const resp = match[1];
+  let req = resp.split(" ");
+  let data = {
+    symbol: req[0],
+    displayName: req[1],
+  };
+  exchangeController.BotTrader().botStatus(chatId, bot, data);
 });
 
 bot.onText(/\/checkExchange (.+)/, (msg, match) => {
@@ -68,15 +82,14 @@ bot.onText(/\/followSRI (.+)/, async (msg, match) => {
   const resp = match[1]; // the captured "whatever"
   let req = resp.split(" ");
   let data = {
-    exchange: req[0],
-    symbol: req[1],
-    timeFrame: req[2],
-    intervalTime: req[3],
-    period: parseInt(req[4]),
-    top: parseInt(req[5]),
-    bottom: parseInt(req[6]),
+    symbol: req[0],
+    candle: req[1],
+    period: parseInt(req[2]),
+    rsi_sell: parseInt(req[3]),
+    rsi_buy: parseInt(req[4]),
+    intervalTime: req[5],
   };
-  exchangeController.Follow().followSRI(chatId, bot, data);
+  exchangeController.BotTrader().setFollowRSI(chatId, bot, data);
 });
 
 bot.on("message", async (msg) => {
@@ -85,7 +98,8 @@ bot.on("message", async (msg) => {
   switch (msg.text) {
     case "/start":
       res = await userController.login(chatId);
-      res.message += "\n" + notes(chatId);
+      let message = notes(chatId);
+      res.message += "\n" + message;
       break;
     case "/getSymbols":
       break;
@@ -104,12 +118,13 @@ bot.on("message", async (msg) => {
 const notes = (chatId) => {
   let message = "Notes: \n";
   message += "/notes to get list note\n";
-  message += "/followSRI exchange symbol timeFrame intervalTime period top bottom\n";
-  message += "/unfollow exchange symbol\n";
+  message += "/setExchange exchange\n";
+  message += "/followSRI symbol timeFrame intervalTime period top bottom\n";
+  message += "/unfollow symbol\n";
   message += "/getApis\n";
   message += "/setApi exchange apiKey secretKey displayName status\n";
-  message += "/getBalance exchange\n";
+  message += "/getBalance\n";
   message += "/checkExchange exchange\n";
-  message += "/startBot displayName symbol invest sri top bottom\n";
-  return {message};
+  message += "/startBot symbol displayName invest  --Note: If only for follow use /startBot symbol \n";
+  return message;
 };

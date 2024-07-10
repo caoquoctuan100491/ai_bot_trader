@@ -1,87 +1,194 @@
-const ccxt = require("ccxt");
+const ccxtPro = require("ccxt").pro;
 const RSI = require("technicalindicators").RSI;
 const Api = require("../models/Exchange_API");
 const AI = require("../models/AI");
 const Order = require("../models/Order");
 const WebSocket = require("ws");
+const User = require("../models/User");
 let arrInterval = [];
 
 const BotTrader = () => {
   const start = async (chatId, bot, data) => {
-    let intervalTime = 10000;
-    if (data.intervalTime.includes("s")) {
-      intervalTime = parseInt(data.intervalTime.replace("s", "")) * 1000;
+    console.log(data);
+    let intervalTime = 1000;
+    let user = await User.findOne({ chatId: chatId });
+    if (user.exchange === undefined) {
+      bot.sendMessage(chatId, "Please set exchange first with /setExchange <exchange>");
+      return;
     }
-    let message = "";
-    for (let i = 0; i < arrInterval.length; i++) {
-      if (arrInterval[i].chatId == chatId && arrInterval[i].exchange === data.exchange && arrInterval[i].symbol === data.symbol) {
-        clearInterval(arrInterval[i].interval);
-        arrInterval.splice(i, 1);
-      }
-    }
+
+    data.intervalId = chatId + user.exchange + data.symbol;
+    removeInterval(chatId, user.exchange, data.symbol);
     data.chatId = chatId;
-    let side;
+
     data.interval = setInterval(async () => {
-      let exchange = new ccxt[data.exchange]();
-      // const ticker = await exchange.fetchTicker(data.symbol);
-      const lastPrice = await getCurrentPrice(exchange, data.symbol);
-      let rsi = await getRSI(data);
-
-      if (rsi.nextValue(lastPrice) >= data.top) {
-        side = "sell";
-      } else if (rsi.nextValue(lastPrice) <= data.bottom) {
-        side = "buy";
-      }
-      if (side != undefined) {
-        let fecthBalance = await exchange.fetchBalance();
-        let balance = fecthBalance.free[data.symbol.split("/")[0]];
-        let price = lastPrice.toFixed(4);
-        data.amount = (balance * data.investment) / price;
-        // let order = {
-        //   exchange: data.exchange,
-        //   status: side,
-        //   symbol: data.symbol,
-        //   candle: data.timeFrame,
-        //   investment: data.investment,
-        //   rsi_buy: data.top,
-        //   rsi_sell: data.bottom,
-        //   stop_loss: data.stopLoss,
-        //   take_profit: data.takeProfit,
-        //   amount: amount,
-        //   profit: 0,
-        // };
-        let orderId = await exchange.createOrder(data.symbol, data.side, side, amount, price);
-
-        let ai = new AI(order);
-        ai.save();
-
-        message = "Order ID: " + orderId + "\n";
-        message += "Symbol: " + data.symbol + "\n";
-        message += "Price: " + price + "\n";
-        message += "Amount: " + amount + "\n";
-        message += "Side: " + side + "\n";
-        message += "Balance: " + balance + "\n";
-      }
-
-      if (message != "") {
-        bot.sendMessage(chatId, message);
+      let user = await User.findOne({ chatId: chatId });
+      let exchange = new ccxtPro[user.exchange]();
+      let ai = await getAI(chatId, { displayName: data.displayName, symbol: data.symbol });
+      intervalTime = Utils().convertTime(data.intervalTime);
+      let ohlcv = await exchange.watchOHLCV(data.symbol, data.candle);
+      const ticker = await exchange.watchTicker(data.symbol);
+      const lastPrice = ticker.last;
+      switch (ai.status) {
+        case "followRSI":
+          if (ai.period == undefined || ai.rsi_sell == undefined || ai.rsi_buy == undefined) {
+            let message =
+              "You are missing one of the following fields:  period, rsi_sell, rsi_buy. Please set RSI again with\n /followRSI <symbol> <candle> <period> <rsi_sell> <rsi_buy> <intervalTime> \n";
+            message += "Example: /followRSI BTC/USDT 1h 14 70 30 1m \n";
+            bot.sendMessage(chatId, message);
+            ai.status = "idle";
+            await ai.save();
+            return;
+          }
+          let rsi = await getRSI(ohlcv, ai.period);
+          let currentRSI = rsi.nextValue(lastPrice);
+          if (currentRSI > ai.rsi_sell) {
+            bot.sendMessage(chatId, "RSI is over sell: " + currentRSI);
+          } else if (currentRSI < ai.rsi_buy) {
+            bot.sendMessage(chatId, "RSI is over buy: " + currentRSI);
+          } else {
+            bot.sendMessage(chatId, "RSI is normal: " + currentRSI);
+          }
+          break;
+        case "running":
+          createOrer(data, rsi, lastPrice, exchange, ai);
+          break;
+        case "pause":
+          pause(chatId, bot, data);
+          break;
+        case "stop":
+          stop(chatId, bot, data);
+          break;
+        default:
+          break;
       }
     }, intervalTime);
     arrInterval.push(data);
   };
 
-  const createOrer = async (data) => {};
+  const removeInterval = (chatId, exchange, symbol) => {
+    intervalId = chatId + exchange + symbol;
+    for (let i = 0; i < arrInterval.length; i++) {
+      if (arrInterval[i].intervalId == intervalId) {
+        clearInterval(arrInterval[i].interval);
+        arrInterval.splice(i, 1);
+      }
+    }
+  };
+
+  const setExchange = async (chatId, bot, exchangeName) => {
+    let user = await User.findOne({
+      chatId: chatId,
+    });
+    if (!user.exchange) {
+      console.log(exchangeName);
+      let exchange = new ccxtPro[exchangeName]();
+      if (exchange != undefined) {
+        user.exchange = exchangeName;
+        await user.save();
+        bot.sendMessage(chatId, "Exchange is set with: " + exchangeName);
+      } else {
+        bot.sendMessage(chatId, "Exchange is not found");
+      }
+    } else {
+      user.exchange = exchangeName;
+      await user.save();
+      bot.sendMessage(chatId, "Exchange is set with: " + exchangeName);
+    }
+  };
+
+  const getAI = async (chatId, data) => {
+    let ai = await AI.findOne({
+      chatId: chatId,
+      displayName: data.displayName,
+      symbol: data.symbol,
+    });
+    return ai;
+  };
+
+  const botStatus = async (chatId, bot, data) => {
+    let ai = await getAI(chatId, data);
+    if (ai == null) return bot.sendMessage(chatId, "Bot not found");
+    let message = "Bot status: " + ai.status + "\n";
+    if (ai.symbol) message += "Symbol: " + ai.symbol + "\n";
+    if (ai.investment) message += "Investment: " + ai.investment + "\n";
+    if (ai.startBalance) message += "Start balance: " + ai.startBalance + "\n";
+    if (ai.rsi_period) message += "RSI period: " + ai.rsi_period + "\n";
+    if (ai.candle) message += "Candle: " + ai.candle + "\n";
+    if (ai.rsi_buy) message += "RSI buy: " + ai.rsi_buy + "\n";
+    if (ai.rsi_sell) message += "RSI sell: " + ai.rsi_sell + "\n";
+    if (ai.stop_loss) message += "Stop loss: " + ai.stop_loss + "\n";
+    if (ai.take_profit) message += "Take profit: " + ai.take_profit + "\n";
+    if (ai.currentRSI) message += "Current RSI: " + ai.currentRSI + "\n";
+    if (ai.intervalTime) message += "Interval time: " + ai.intervalTime + "\n";
+    if (ai.currentProfit) message += "Current profit: " + ai.currentProfit + "\n";
+    if (ai.profit) message += "Profit: " + ai.profit + "\n";
+    bot.sendMessage(chatId, message);
+  };
+
+  const setFollowRSI = async (chatId, bot, data) => {
+    let ai = await getAI(chatId, data);
+    ai.status = "followRSI";
+    ai.candle = data.timeFrame;
+    ai.rsi_sell = data.rsi_sell;
+    ai.rsi_buy = data.rsi_buy;
+    ai.rsi_period = data.period;
+    ai.intervalTime = data.intervalTime;
+    await ai.save();
+    bot.sendMessage(
+      chatId,
+      "Follow RSI is set with symbol: " + data.symbol + " and period: " + data.period + " to sell: " + data.rsi_sell + " to: " + data.rsi_buy
+    );
+  };
+
+  const createOrer = async (data) => {
+    // if (side != undefined) {
+    //   let fecthBalance = await exchange.fetchBalance();
+    //   let balance = fecthBalance.free[data.symbol.split("/")[0]];
+    //   let price = lastPrice.toFixed(4);
+    //   data.amount = (balance * data.investment) / price;
+    //   let orderId = await exchange.createOrder(data.symbol, data.side, side, amount, price);
+    //   message = "Order ID: " + orderId + "\n";
+    //   message += "Symbol: " + data.symbol + "\n";
+    //   message += "Price: " + price + "\n";
+    //   message += "Amount: " + amount + "\n";
+    //   message += "Side: " + side + "\n";
+    //   message += "Balance: " + balance + "\n";
+    // }
+  };
   const pause = async (chatId, bot, data) => {};
   const resume = async (chatId, bot, data) => {};
   const stop = async (chatId, bot, data) => {};
 
-  return { start, pause, resume, stop };
+  return { start, pause, resume, stop, setFollowRSI, setExchange, botStatus };
 };
 
 const Utils = () => {
+  const convertTime = (time) => {
+    let frame = 1;
+    switch (time) {
+      case "m":
+        frame = 60;
+        break;
+      case "h":
+        frame = 3600;
+        break;
+      case "d":
+        frame = 86400;
+        break;
+      case "w":
+        frame = 604800;
+        break;
+      case "M":
+        frame = 2592000;
+        break;
+      default:
+    }
+    return frame * 1000;
+  };
   const checkExchange = (data) => {
     let message = "";
-    ccxt.exchanges.forEach((exchange) => {
+    ccxtPro.exchanges.forEach((exchange) => {
       if (exchange.includes(data) || exchange === data) {
         console.log(exchange);
         message += exchange + "\n";
@@ -96,6 +203,7 @@ const Utils = () => {
   return {
     checkExchange,
     getSymbols,
+    convertTime,
   };
 };
 
@@ -142,7 +250,7 @@ const API = () => {
     if (exchangeId.includes("-test")) {
       exchangeId = exchangeId.replace("-test", "");
     }
-    let exchange = new ccxt[exchangeId]({
+    let exchange = new ccxtPro[exchangeId]({
       apiKey: body.api,
       secret: body.secret,
       enableRateLimit: true,
@@ -169,56 +277,18 @@ const API = () => {
 };
 
 const Follow = () => {
-  const followSRI = async (chatId, bot, data) => {
-    let intervalTime = 10000;
-    if (data.intervalTime.includes("s")) {
-      intervalTime = parseInt(data.intervalTime.replace("s", "")) * 1000;
-    }
-    let message = "";
-
-    for (let i = 0; i < arrInterval.length; i++) {
-      if (arrInterval[i].chatId == chatId && arrInterval[i].exchange === data.exchange && arrInterval[i].symbol === data.symbol) {
-        clearInterval(arrInterval[i].interval);
-        arrInterval.splice(i, 1);
-      }
-    }
-    data.chatId = chatId;
-    console.log(data.chatId + " followSRI " + data.symbol + "SRI " + data.period + " " + data.top + " - " + data.bottom);
-    data.interval = setInterval(async () => {
-      let exchange = new ccxt[data.exchange]();
-      // const ticker = await exchange.fetchTicker(data.symbol);
-      const lastPrice = await getCurrentPrice(exchange, data.symbol);
-      let rsi = await getRSI(data);
-      message = "RSI: " + rsi.nextValue(lastPrice) + "\n";
-      message += "Price: " + lastPrice + "\n";
-      if (rsi.nextValue(lastPrice) >= data.top) {
-        message = "Exceeded selling point." + "\n" + message;
-        bot.sendMessage(chatId, message);
-      } else if (rsi.nextValue(lastPrice) <= data.bottom) {
-        message = "Exceeded buying point." + "\n" + message;
-        bot.sendMessage(chatId, message);
-      }
-    }, intervalTime);
-    arrInterval.push(data);
+  const followRSI = async (chatId, bot, rsi) => {
+    if (rsi === undefined) return;
   };
 
-  const unfollow = async (chatId, data) => {
-    for (let i = 0; i < arrInterval.length; i++) {
-      if (arrInterval[i].chatId == chatId && arrInterval[i].exchange === data.exchange && arrInterval[i].symbol === data.symbol) {
-        clearInterval(arrInterval[i].interval);
-        arrInterval.splice(i, 1);
-      }
-    }
-  };
+  const unfollow = async (chatId, data) => {};
   return {
-    followSRI,
+    followRSI,
     unfollow,
   };
 };
 
-const getRSI = async (data) => {
-  let exchange = new ccxt[data.exchange]();
-  let ohlcv = await exchange.fetchOHLCV(data.symbol, data.timeFrame);
+const getRSI = async (ohlcv, period) => {
   const entries = ohlcv.map((entry) => ({
     time: entry[0],
     open: entry[1],
@@ -227,51 +297,27 @@ const getRSI = async (data) => {
     close: entry[4],
     vollume: entry[5],
   }));
-  let arrClose = entries.map((e) => e.close);
-  let values = arrClose.slice(-data.period - 1);
+  let arrClose = ohlcv.map((e) => e[4]);
+  console.log(arrClose);
+  let values = arrClose.slice(-period - 1);
   let input = {
     values: values,
-    period: data.period,
+    period: period,
   };
   let rsi = new RSI(input);
   return rsi;
 };
 
 const getCurrentPrice = async (exchange, symbol) => {
-  try {
-    const strSymbol = symbol.replace("/", "").toLowerCase();
-    let url = "";
-    let wsURL = "";
-    if (exchange === "binance") {
-      url = "wss://stream.binance.com:9443/ws/";
-      wsURL = url + strSymbol + "@ticker";
+  if (exchange.has["watchTickers"]) {
+    try {
+      const tickers = await exchange.watchTickers(symbol);
+      console.log(new Date(), tickers);
+    } catch (e) {
+      console.log(e);
+      // stop the loop on exception or leave it commented to retry
+      // throw e
     }
-
-    // Kết nối WebSocket
-    const ws = new WebSocket(wsURL);
-
-    ws.on("open", () => {
-      console.log("WebSocket kết nối thành công");
-    });
-
-    ws.on("message", (data) => {
-      const ticker = JSON.parse(data);
-
-      // Lấy giá hiện tại từ ticker
-      const price = ticker.c; // 'c' là giá hiện tại (last price)
-      console.log(`Giá hiện tại của BTC/USDT: ${price}`);
-      return price;
-    });
-
-    ws.on("error", (error) => {
-      console.error("WebSocket error:", error);
-    });
-
-    ws.on("close", () => {
-      console.log("WebSocket đóng kết nối");
-    });
-  } catch (error) {
-    console.error(error);
   }
 };
 

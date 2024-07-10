@@ -26,8 +26,8 @@ mongoose
 
 app.use(express.json());
 app.use(morgan("dev"));
-apiRouter(app);
+// apiRouter(app);
 
-exchangeAIController.resume();
+// exchangeAIController.resume();
 
 server.listen(process.env.PORT, () => console.log(`Server started on port ${process.env.PORT}`));
