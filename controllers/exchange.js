@@ -9,7 +9,6 @@ let arrInterval = [];
 
 const BotTrader = () => {
   const start = async (chatId, bot, data) => {
-    console.log(data);
     let intervalTime = 1000;
     let user = await User.findOne({ chatId: chatId });
     if (user.exchange === undefined) {
